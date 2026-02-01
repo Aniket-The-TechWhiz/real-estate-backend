@@ -10,8 +10,18 @@ const leadRoutes = require('./routes/LeadRoutes');
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  config.clientUrl,
+  'https://real-estate-frontend-eight-tawny.vercel.app',
+  ...config.clientUrls
+].filter(Boolean);
+
 app.use(cors({
-  origin: config.clientUrl,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());

@@ -14,6 +14,7 @@ const config = {
   
   // CORS configuration
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+  clientUrls: (process.env.CLIENT_URLS || '').split(',').map(url => url.trim()).filter(Boolean),
   
   // Google Sheets configuration
   googleSheetsUrl: process.env.GOOGLE_SHEETS_URL || '',

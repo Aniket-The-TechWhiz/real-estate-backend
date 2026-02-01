@@ -8,8 +8,18 @@ const propertySchema = new mongoose.Schema({
     maxlength: [200, 'Title cannot exceed 200 characters']
   },
   images: [{
-    type: String,
-    required: true
+    data: {
+      type: Buffer,
+      required: true
+    },
+    contentType: {
+      type: String,
+      required: true
+    },
+    filename: {
+      type: String,
+      required: true
+    }
   }],
   category: {
     type: String,

@@ -20,7 +20,7 @@ router.post('/', uploadPropertyImages, handleMulterError, validatePropertyCreate
 router.get('/', getAllProperties);
 router.get('/search', searchProperties);
 router.get('/:id', validateObjectId, getPropertyById);
-router.put('/:id', validateObjectId, validatePropertyUpdate, updateProperty);
+router.put('/:id', uploadPropertyImages, handleMulterError, validateObjectId, validatePropertyUpdate, updateProperty);
 router.delete('/:id', validateObjectId, deleteProperty);
 
 module.exports = router;

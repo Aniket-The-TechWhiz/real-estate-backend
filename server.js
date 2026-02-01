@@ -1,8 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 const config = require('./config/config');
 const { errorHandler } = require('./middleware/errorHandler');
 const propertyRoutes = require('./routes/PropertyRoutes');
@@ -18,16 +16,6 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve static files (uploaded images)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, config.uploadDir);
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('✓ Uploads directory created');
-}
 
 // Connect to MongoDB
 mongoose.connect(config.mongodbUri)

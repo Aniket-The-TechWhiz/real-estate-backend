@@ -1,14 +1,62 @@
 const Property = require('../models/Property');
 
+const parseImagesFromBody = (images) => {
+  if (!images) return [];
+
+  let list = images;
+  if (typeof images === 'string') {
+    try {
+      list = JSON.parse(images);
+    } catch (error) {
+      list = [images];
+    }
+  }
+
+  if (!Array.isArray(list)) {
+    list = [list];
+  }
+
+  return list.map((item, index) => {
+    if (typeof item !== 'string') return null;
+    const match = item.match(/^data:(.+);base64,(.+)$/);
+    if (!match) return null;
+    return {
+      data: Buffer.from(match[2], 'base64'),
+      contentType: match[1],
+      filename: `image-${Date.now()}-${index}`
+    };
+  }).filter(Boolean);
+};
+
+const formatPropertyImages = (property) => {
+  const obj = property.toObject({ virtuals: true });
+  if (Array.isArray(obj.images)) {
+    obj.images = obj.images.map((img) => {
+      if (img && img.data && img.contentType) {
+        const base64 = img.data.toString('base64');
+        return `data:${img.contentType};base64,${base64}`;
+      }
+      return img;
+    });
+  }
+  return obj;
+};
+
 // Create a new property
 exports.createProperty = async (req, res) => {
   try {
-    // Handle uploaded images from multer
-    const imagePaths = req.files ? req.files.map(file => file.path) : req.body.images;
+    // Handle uploaded images from multer (memory)
+    const images = req.files && req.files.length > 0
+      ? req.files.map(file => ({
+        data: file.buffer,
+        contentType: file.mimetype,
+        filename: file.originalname
+      }))
+      : parseImagesFromBody(req.body.images);
     
     const propertyData = {
       title: req.body.title,
-      images: imagePaths,
+      images: images,
       category: req.body.category,
       listingType: req.body.listingType,
       price: req.body.price,
@@ -26,7 +74,7 @@ exports.createProperty = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Property created successfully',
-      data: property
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(400).json({
@@ -82,7 +130,7 @@ exports.getAllProperties = async (req, res) => {
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
-      data: properties
+      data: properties.map(formatPropertyImages)
     });
   } catch (error) {
     res.status(500).json({
@@ -106,7 +154,7 @@ exports.getPropertyById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: property
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(500).json({
@@ -122,7 +170,16 @@ exports.updateProperty = async (req, res) => {
     // Handle uploaded images if any
     const updateData = { ...req.body };
     if (req.files && req.files.length > 0) {
-      updateData.images = req.files.map(file => file.path);
+      updateData.images = req.files.map(file => ({
+        data: file.buffer,
+        contentType: file.mimetype,
+        filename: file.originalname
+      }));
+    } else if (req.body.images) {
+      const parsed = parseImagesFromBody(req.body.images);
+      if (parsed.length > 0) {
+        updateData.images = parsed;
+      }
     }
     
     const property = await Property.findByIdAndUpdate(
@@ -144,7 +201,7 @@ exports.updateProperty = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Property updated successfully',
-      data: property
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(400).json({
@@ -202,7 +259,7 @@ exports.searchProperties = async (req, res) => {
     res.status(200).json({
       success: true,
       count: properties.length,
-      data: properties
+      data: properties.map(formatPropertyImages)
     });
   } catch (error) {
     res.status(500).json({

@@ -1,0 +1,78 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const config = require('./config/config');
+const { errorHandler } = require('./middleware/errorHandler');
+const propertyRoutes = require('./routes/PropertyRoutes');
+const leadRoutes = require('./routes/LeadRoutes');
+
+// Initialize express app
+const app = express();
+
+// Middleware
+app.use(cors({
+  origin: config.clientUrl,
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files (uploaded images)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, config.uploadDir);
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✓ Uploads directory created');
+}
+
+// Connect to MongoDB
+mongoose.connect(config.mongodbUri)
+  .then(() => {
+    console.log('✓ Connected to MongoDB');
+  })
+  .catch((error) => {
+    console.error('✗ MongoDB connection error:', error.message);
+    process.exit(1);
+  });
+
+// Routes
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Real Estate API',
+    version: '1.0.0',
+    endpoints: {
+      properties: '/api/properties',
+      leads: '/api/leads'
+    }
+  });
+});
+
+app.use('/api/properties', propertyRoutes);
+app.use('/api/leads', leadRoutes);
+
+// Error handler middleware (must be last)
+app.use(errorHandler);
+
+// Handle 404 routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
+});
+
+// Start server
+app.listen(config.port, () => {
+  console.log(`✓ Server running on port ${config.port}`);
+  console.log(`✓ Environment: ${config.nodeEnv}`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('✗ Unhandled Promise Rejection:', err);
+  process.exit(1);
+});

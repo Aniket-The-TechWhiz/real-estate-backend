@@ -12,6 +12,7 @@ const app = express();
 // Middleware
 const allowedOrigins = [
   config.clientUrl,
+  'http://localhost:3001',
   'https://real-estate-frontend-eight-tawny.vercel.app',
   ...config.clientUrls
 ].filter(Boolean);

@@ -6,8 +6,7 @@ const {
   getPropertyById,
   updateProperty,
   deleteProperty,
-  searchProperties,
-  getPropertyImage
+  searchProperties
 } = require('../controller/PropertyController');
 const {
   validatePropertyCreate,
@@ -20,7 +19,6 @@ const { uploadPropertyImages, handleMulterError } = require('../middleware/uploa
 router.post('/', uploadPropertyImages, handleMulterError, validatePropertyCreate, createProperty);
 router.get('/', getAllProperties);
 router.get('/search', searchProperties);
-router.get('/:id/images/:index', validateObjectId, getPropertyImage);
 router.get('/:id', validateObjectId, getPropertyById);
 router.put('/:id', uploadPropertyImages, handleMulterError, validateObjectId, validatePropertyUpdate, updateProperty);
 router.delete('/:id', validateObjectId, deleteProperty);

@@ -1,5 +1,4 @@
 const Property = require('../models/Property');
-const sharp = require('sharp');
 
 const parseImagesFromBody = (images) => {
   if (!images) return [];
@@ -29,63 +28,18 @@ const parseImagesFromBody = (images) => {
   }).filter(Boolean);
 };
 
-const parseBoolean = (value, defaultValue = false) => {
-  if (value === undefined || value === null) return defaultValue;
-  if (typeof value === 'boolean') return value;
-  const normalized = String(value).toLowerCase().trim();
-  if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
-  if (['false', '0', 'no', 'n'].includes(normalized)) return false;
-  return defaultValue;
-};
-
-const parseFields = (fields) => {
-  if (!fields) return null;
-  return fields
-    .split(',')
-    .map((field) => field.trim())
-    .filter(Boolean);
-};
-
-const buildImageUrl = (req, propertyId, index, options = {}) => {
-  const { width, format } = options;
-  const params = new URLSearchParams();
-  if (width) params.set('w', String(width));
-  if (format) params.set('format', format);
-  const query = params.toString();
-  const base = `${req.protocol}://${req.get('host')}`;
-  return `${base}/api/properties/${propertyId}/images/${index}${query ? `?${query}` : ''}`;
-};
-
-const formatPropertyResponse = (property, req, options = {}) => {
-  const {
-    includeImages = false,
-    imageSize = 'original',
-    thumbOnly = false,
-    includeThumbnail = true
-  } = options;
-
-  const obj = property.toObject ? property.toObject({ virtuals: true }) : property;
-  const images = Array.isArray(obj.images) ? obj.images : [];
-
-  const thumbWidth = 500;
-  const imageWidth = imageSize === 'thumb' ? thumbWidth : undefined;
-
-  const response = { ...obj };
-  delete response.images;
-
-  if (includeThumbnail && images.length > 0) {
-    response.thumbnailUrl = buildImageUrl(req, obj._id, 0, { width: thumbWidth, format: 'webp' });
+const formatPropertyImages = (property) => {
+  const obj = property.toObject({ virtuals: true });
+  if (Array.isArray(obj.images)) {
+    obj.images = obj.images.map((img) => {
+      if (img && img.data && img.contentType) {
+        const base64 = img.data.toString('base64');
+        return `data:${img.contentType};base64,${base64}`;
+      }
+      return img;
+    });
   }
-
-  if (includeImages && images.length > 0) {
-    const targetWidth = thumbOnly ? thumbWidth : imageWidth;
-    response.imageUrls = images.map((_, index) => buildImageUrl(req, obj._id, index, {
-      width: targetWidth,
-      format: 'webp'
-    }));
-  }
-
-  return response;
+  return obj;
 };
 
 // Create a new property
@@ -120,7 +74,7 @@ exports.createProperty = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Property created successfully',
-      data: formatPropertyResponse(property, req, { includeImages: true })
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(400).json({
@@ -143,11 +97,7 @@ exports.getAllProperties = async (req, res) => {
       furnishing,
       status,
       page = 1,
-      limit = 10,
-      includeImages,
-      fields,
-      imageSize,
-      thumbOnly
+      limit = 10 
     } = req.query;
 
     const filter = {};
@@ -166,26 +116,11 @@ exports.getAllProperties = async (req, res) => {
     }
 
     const skip = (page - 1) * limit;
-    const shouldIncludeImages = parseBoolean(includeImages, false);
-    const onlyThumbs = parseBoolean(thumbOnly, false) || imageSize === 'thumb';
-    const fieldList = parseFields(fields);
     
-    let query = Property.find(filter)
+    const properties = await Property.find(filter)
       .skip(skip)
       .limit(Number(limit))
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (fieldList && fieldList.length > 0) {
-      const selectFields = new Set(fieldList);
-      selectFields.add('_id');
-      selectFields.add('images');
-      query = query.select(Array.from(selectFields).join(' '));
-    }
-
-    query = query.select('-images.data').slice('images', 1);
-
-    const properties = await query;
+      .sort({ createdAt: -1 });
 
     const total = await Property.countDocuments(filter);
 
@@ -195,12 +130,7 @@ exports.getAllProperties = async (req, res) => {
       total,
       page: Number(page),
       pages: Math.ceil(total / limit),
-      data: properties.map((property) => formatPropertyResponse(property, req, {
-        includeImages: shouldIncludeImages,
-        imageSize: onlyThumbs ? 'thumb' : imageSize,
-        thumbOnly: true,
-        includeThumbnail: true
-      }))
+      data: properties.map(formatPropertyImages)
     });
   } catch (error) {
     res.status(500).json({
@@ -213,23 +143,7 @@ exports.getAllProperties = async (req, res) => {
 // Get single property by ID
 exports.getPropertyById = async (req, res) => {
   try {
-    const { includeImages, fields, imageSize, thumbOnly } = req.query;
-    const shouldIncludeImages = parseBoolean(includeImages, false);
-    const onlyThumbs = parseBoolean(thumbOnly, false) || imageSize === 'thumb';
-    const fieldList = parseFields(fields);
-
-    let query = Property.findById(req.params.id).lean();
-
-    if (fieldList && fieldList.length > 0) {
-      const selectFields = new Set(fieldList);
-      selectFields.add('_id');
-      selectFields.add('images');
-      query = query.select(Array.from(selectFields).join(' '));
-    }
-
-    query = query.select('-images.data');
-
-    const property = await query;
+    const property = await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
@@ -240,12 +154,7 @@ exports.getPropertyById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: formatPropertyResponse(property, req, {
-        includeImages: shouldIncludeImages,
-        imageSize: imageSize || 'original',
-        thumbOnly: onlyThumbs,
-        includeThumbnail: true
-      })
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(500).json({
@@ -292,7 +201,7 @@ exports.updateProperty = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Property updated successfully',
-      data: formatPropertyResponse(property, req, { includeImages: true })
+      data: formatPropertyImages(property)
     });
   } catch (error) {
     res.status(400).json({
@@ -345,92 +254,15 @@ exports.searchProperties = async (req, res) => {
         { location: { $regex: query, $options: 'i' } },
         { category: { $regex: query, $options: 'i' } }
       ]
-    })
-      .select('-images.data')
-      .slice('images', 1)
-      .lean()
-      .limit(20);
+    }).limit(20);
 
     res.status(200).json({
       success: true,
       count: properties.length,
-      data: properties.map((property) => formatPropertyResponse(property, req, {
-        includeImages: false,
-        imageSize: 'thumb',
-        thumbOnly: true,
-        includeThumbnail: true
-      }))
+      data: properties.map(formatPropertyImages)
     });
   } catch (error) {
     res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
-// Get property image by index with optional resizing/format
-exports.getPropertyImage = async (req, res) => {
-  try {
-    const { id, index } = req.params;
-    const { format, w } = req.query;
-
-    const property = await Property.findById(id).select('images').lean();
-
-    if (!property || !Array.isArray(property.images) || property.images.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Image not found'
-      });
-    }
-
-    const imageIndex = Number(index);
-    if (Number.isNaN(imageIndex) || imageIndex < 0 || imageIndex >= property.images.length) {
-      return res.status(404).json({
-        success: false,
-        message: 'Image not found'
-      });
-    }
-
-    const image = property.images[imageIndex];
-    if (!image || !image.data) {
-      return res.status(404).json({
-        success: false,
-        message: 'Image not found'
-      });
-    }
-
-    const width = w ? Number(w) : undefined;
-    const targetFormat = format ? String(format).toLowerCase() : null;
-
-    let transformer = sharp(image.data);
-
-    if (width && !Number.isNaN(width)) {
-      transformer = transformer.resize({ width, withoutEnlargement: true });
-    }
-
-    let contentType = image.contentType || 'image/jpeg';
-
-    if (targetFormat === 'webp') {
-      transformer = transformer.webp({ quality: 80 });
-      contentType = 'image/webp';
-    } else if (targetFormat === 'jpeg' || targetFormat === 'jpg') {
-      transformer = transformer.jpeg({ quality: 85 });
-      contentType = 'image/jpeg';
-    } else if (targetFormat === 'png') {
-      transformer = transformer.png();
-      contentType = 'image/png';
-    }
-
-    const output = await transformer.toBuffer();
-
-    res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=31536000, immutable');
-    res.set('Vary', 'Accept');
-
-    return res.status(200).send(output);
-  } catch (error) {
-    return res.status(500).json({
       success: false,
       message: error.message
     });

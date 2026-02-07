@@ -11,12 +11,14 @@
   "license": "ISC",
   "description": "Real Estate Property Management API",
   "dependencies": {
+    "compression": "^1.7.5",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "mongoose": "^9.1.5",
     "multer": "^2.0.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "sharp": "^0.33.5"
   }
 }
